@@ -2,14 +2,24 @@
 
 Tiddly is a simple DAV webserver for [TiddlyWiki 5](https://tiddlywiki.com/). This is intended for local use only. For public facing wikis, consider the [official Node.js server](https://www.npmjs.com/package/tiddlywiki).
 
-The CLI serves your wiki HTML and automatically creates a backup before each save.
+Use the CLI to serve your wiki HTML and automatically create backups before each save.
 
-It can be used like so:
-```
-tiddly [target.html] [backup directory]
-```
+Run `tiddly --help` for usage information.
 
-Afterwards, point your browser at `http://127.0.0.1:8000`.
+```
+tiddly 0.1.0
+A small, leightweight TiddlyWiki server that supports `PUT` (DAV) saves
+
+USAGE:
+    tiddly [OPTIONS] --target <TARGET> --backup-dir <BACKUP_DIR>
+
+OPTIONS:
+    -b, --backup-dir <BACKUP_DIR>    Directory to store backups
+    -h, --help                       Print help information
+    -p, --port <PORT>                Port to serve on [default: 8000]
+    -t, --target <TARGET>            Target TiddlyWiki HTML file
+    -V, --version                    Print version information
+```
 
 ## Installation
 To start, clone the repo.

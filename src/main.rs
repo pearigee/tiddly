@@ -1,5 +1,8 @@
+mod cli;
+
 #[macro_use]
 extern crate rocket;
+use clap::Parser;
 use rocket::data::{Data, ToByteUnit};
 use rocket::fs::NamedFile;
 use rocket::http::Status;
@@ -7,45 +10,41 @@ use rocket::request::Request;
 use rocket::response::{self, Responder, Response};
 use rocket::State;
 
-struct TiddlyConfig {
-    path: String,
-    backup_dir: String,
-    version: String,
-}
+use crate::cli::Args;
 
-fn backup(config: &TiddlyConfig) -> Result<(), std::io::Error> {
+fn backup(config: &Args) -> Result<(), std::io::Error> {
     let filename = chrono::Local::now()
         .format("%Y-%m-%d-%H-%M-%S.html")
         .to_string();
     let backup_path: String = format!(
         "{}{}{}",
-        &config.backup_dir,
+        &config.backup_dir.display(),
         std::path::MAIN_SEPARATOR,
         filename
     );
 
-    std::fs::copy(&config.path, backup_path)?;
+    std::fs::copy(&config.target, backup_path)?;
 
     Ok(())
 }
 
 #[get("/")]
-async fn index(config: &State<TiddlyConfig>) -> Option<NamedFile> {
-    println!("Serving wiki: {}", &config.path);
-    NamedFile::open(&config.path).await.ok()
+async fn index(config: &State<Args>) -> Option<NamedFile> {
+    println!("Serving wiki: {}", &config.target.display());
+    NamedFile::open(&config.target).await.ok()
 }
 
 #[put("/", data = "<content>")]
-async fn save(config: &State<TiddlyConfig>, content: Data<'_>) -> (Status, &'static str) {
-    println!("Backing up wiki to: {}", &config.backup_dir);
+async fn save(config: &State<Args>, content: Data<'_>) -> (Status, &'static str) {
+    println!("Backing up wiki to: {}", &config.backup_dir.display());
     if backup(&config).is_err() {
         return (Status::InternalServerError, "Failed to backup wiki");
     }
 
-    println!("Saving wiki: {}", &config.path);
+    println!("Saving wiki: {}", &config.target.display());
     content
         .open(100.megabytes())
-        .into_file(&config.path)
+        .into_file(&config.target)
         .await
         .map(|_| (Status::Ok, "Wiki backedup and saved successfully"))
         .unwrap_or((Status::InternalServerError, "Failed to save file"))
@@ -67,9 +66,9 @@ impl<'a> Responder<'a, 'a> for DavOptions {
 // This is how TW determines what save options are available.
 // The 'dav' header indicates the wiki can be saved with a PUT.
 #[options("/")]
-fn options(config: &State<TiddlyConfig>) -> DavOptions {
+fn options() -> DavOptions {
     DavOptions {
-        server_version: config.version.to_string(),
+        server_version: env!("CARGO_PKG_VERSION").to_string(),
     }
 }
 
@@ -82,28 +81,12 @@ fn head() -> Status {
 
 #[launch]
 fn rocket() -> _ {
-    let suggested_usage = "`tiddly [target.html] [backup directory]`";
+    let args = Args::parse();
 
-    if std::env::args().len() < 3 {
-        println!("Usage: {}", suggested_usage);
-        std::process::exit(1);
-    }
+    println!("Running tiddly server at http://127.0.0.1:{}", args.port);
 
-    let target = std::env::args()
-        .nth(1)
-        .expect(&format!("No target html file defined! {}", suggested_usage));
-
-    let backup_dir = std::env::args().nth(2).expect(&format!(
-        "No target backup directory defined! {}",
-        suggested_usage
-    ));
-
-    println!("Running tiddly server at http://127.0.0.1:8000");
-    rocket::build()
+    let server_config = rocket::Config::figment().merge(("port", args.port));
+    rocket::custom(server_config)
         .mount("/", routes![index, save, options, head])
-        .manage(TiddlyConfig {
-            path: target.to_string(),
-            backup_dir: backup_dir.to_string(),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-        })
+        .manage(args)
 }
