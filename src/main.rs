@@ -13,19 +13,28 @@ use rocket::State;
 use crate::cli::Args;
 
 fn backup(config: &Args) -> Result<(), std::io::Error> {
-    let filename = chrono::Local::now()
-        .format("%Y-%m-%d-%H-%M-%S.html")
-        .to_string();
-    let backup_path: String = format!(
-        "{}{}{}",
-        &config.backup_dir.display(),
-        std::path::MAIN_SEPARATOR,
-        filename
-    );
+    match &config.backup_dir {
+        Some(backup_dir) => {
+            println!("Backing up wiki to: {}", backup_dir.display());
+            let filename = chrono::Local::now()
+                .format("%Y-%m-%d-%H-%M-%S.html")
+                .to_string();
+            let backup_path: String = format!(
+                "{}{}{}",
+                backup_dir.display(),
+                std::path::MAIN_SEPARATOR,
+                filename
+            );
 
-    std::fs::copy(&config.target, backup_path)?;
+            std::fs::copy(&config.target, backup_path)?;
 
-    Ok(())
+            Ok(())
+        }
+        None => Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "No backup directory specified",
+        )),
+    }
 }
 
 #[get("/")]
@@ -36,9 +45,12 @@ async fn index(config: &State<Args>) -> Option<NamedFile> {
 
 #[put("/", data = "<content>")]
 async fn save(config: &State<Args>, content: Data<'_>) -> (Status, &'static str) {
-    println!("Backing up wiki to: {}", &config.backup_dir.display());
-    if backup(&config).is_err() {
-        return (Status::InternalServerError, "Failed to backup wiki");
+    if config.backup_dir.is_some() {
+        if backup(&config).is_err() {
+            return (Status::InternalServerError, "Failed to backup wiki");
+        }
+    } else {
+        println!("No backup directory specified, skipping backup")
     }
 
     println!("Saving wiki: {}", &config.target.display());

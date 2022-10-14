@@ -10,7 +10,7 @@ pub struct Args {
 
     /// Directory to store backups.
     #[clap(short, long, parse(from_os_str))]
-    pub backup_dir: std::path::PathBuf,
+    pub backup_dir: Option<std::path::PathBuf>,
 
     /// Port to serve on.
     #[clap(short, long, default_value_t = 8000)]
